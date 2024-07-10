@@ -1,0 +1,65 @@
+﻿@page "/ProductCats"
+@using BlazorWithDB.Data
+@inject CategoryService CategoryService
+@inject DapperRepository DapperRepository
+<h3>Categories</h3>
+
+
+@if (error != null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Category ID</th>
+            <th>Category Name</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (categories == null)
+        {
+            <tr>
+                <td colspan="3">Loading...</td>
+            </tr>
+        }
+        else if (!categories.Any())
+        {
+            <tr>
+                <td colspan="3">No products available.</td>
+            </tr>
+        }
+        else
+        {
+            @foreach (var category in categories)
+            {
+                <tr>
+                    <td>@category.Category_Id</td>
+                    <td>@category.Category_Name</td>
+                    
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+
+
+@code {
+    private IEnumerable<ProductCat> categories;
+    private string error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            categories = await DapperRepository.QueryAsync<ProductCat>("SELECT * FROM PRODUCT_CATEGORIES");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+}
