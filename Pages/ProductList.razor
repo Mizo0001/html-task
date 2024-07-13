@@ -1,1 +1,227 @@
+@page "/products"
+@using BlazorWithDB.Data
+@inject ProductService ProductService
+@inject DapperRepository DapperRepository
+@inject IJSRuntime JSRuntime
+
+<h3>Product List</h3>
+
+<div>
+    <h4>Add New Product</h4>
+    <EditForm Model="newProduct" OnValidSubmit="HandleValidSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="form-group">
+            <label for="P_name">Product Name</label>
+            <InputText id="P_name" class="form-control" @bind-Value="newProduct.P_name" />
+        </div>
+
+        <div class="form-group">
+            <label for="Category_ID">Category</label>
+            @if (Categories == null)
+            {
+                <select id="Category_ID" class="form-control" disabled>
+                    <option>Loading categories...</option>
+                </select>
+            }
+            else if (!Categories.Any())
+            {
+                <select id="Category_ID" class="form-control" disabled>
+                    <option>No categories available</option>
+                </select>
+            }
+            else
+            {
+                <InputSelect id="Category_ID" class="form-control" @bind-Value="newProduct.Category_ID">
+                    @foreach (var category in Categories)
+                    {
+                        <option value="@category.Category_Id">@category.Category_Name</option>
+                    }
+                </InputSelect>
+            }
+        </div>
+
+        <button type="submit" class="btn btn-primary">Add Product</button>
+    </EditForm>
+</div>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Product ID</th>
+            <th>Product Name</th>
+            <th>Category</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (products == null)
+        {
+            <tr>
+                <td colspan="4">Loading...</td>
+            </tr>
+        }
+        else if (!products.Any())
+        {
+            <tr>
+                <td colspan="4">No products available.</td>
+            </tr>
+        }
+        else
+        {
+            @foreach (var product in products)
+            {
+                <tr>
+                    <td>@product.Product_ID</td>
+                    <td>@product.P_name</td>
+                    <td>@Categories?.FirstOrDefault(c => c.Category_Id == product.Category_ID)?.Category_Name</td>
+                    <td>
+                        <button class="btn btn-info" @onclick="() => OpenOffcanvas(product, true)">Edit</button>
+                        <button class="btn btn-danger" @onclick="() => OpenOffcanvas(product, false)">Delete</button>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+<div class="offcanvas offcanvas-end @(showOffcanvas ? "show" : "")" tabindex="-1" id="offcanvas" aria-labelledby="offcanvasLabel" style="visibility:@(showOffcanvas ? "visible" : "hidden")">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="offcanvasLabel">@offcanvasTitle</h5>
+        <button type="button" class="btn-close" @onclick="CloseOffcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        @if (isEdit)
+        {
+            @if (Categories != null)
+            {
+                <EditForm Model="selectedProduct" OnValidSubmit="HandleUpdateSubmit">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="form-group">
+                        <label for="edit_P_name">Product Name</label>
+                        <InputText id="edit_P_name" class="form-control" @bind-Value="selectedProduct.P_name" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_Category_ID">Category</label>
+                        <InputSelect id="edit_Category_ID" class="form-control" @bind-Value="selectedProduct.Category_ID">
+                            @foreach (var category in Categories)
+                            {
+                                <option value="@category.Category_Id">@category.Category_Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Update Product</button>
+                </EditForm>
+            }
+            else
+            {
+                <p>Loading categories...</p>
+            }
+        }
+        else
+        {
+            <div>
+                <p>Are you sure you want to delete the product "<strong>@selectedProduct.P_name</strong>"?</p>
+                <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+                <button class="btn btn-secondary" @onclick="CloseOffcanvas">Cancel</button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private IEnumerable<Product> products;
+    private IEnumerable<ProductCat> Categories;
+    private Product newProduct = new Product();
+    private Product selectedProduct = new Product();
+    private bool showOffcanvas = false;
+    private bool isEdit = false;
+    private string offcanvasTitle;
+
+    protected override async Task OnInitializedAsync()
+    {
+        products = await DapperRepository.QueryAsync<Product>("GetProducts");
+        // products = await ProductService.GetProductsAsync();
+        Categories = await DapperRepository.QueryAsync<ProductCat>("GetCategories");
+        // Categories = await ProductService.GetCategoriesAsync();
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        var parameters = new
+        {
+            P_name = newProduct.P_name,
+            Category_ID = newProduct.Category_ID
+        };
+        await DapperRepository.ExecuteAsync("AddProduct", parameters);
+        // await ProductService.AddProductAsync(newProduct);
+        products = await DapperRepository.QueryAsync<Product>("GetProducts");
+        // products = await ProductService.GetProductsAsync();
+        newProduct = new Product();
+        StateHasChanged();
+    }
+
+    private void OpenOffcanvas(Product product, bool edit)
+    {
+        selectedProduct = new Product
+            {
+                Product_ID = product.Product_ID,
+                P_name = product.P_name,
+                Category_ID = product.Category_ID
+            };
+        isEdit = edit;
+        offcanvasTitle = isEdit ? "Edit Product" : "Delete Product";
+        showOffcanvas = true;
+        StateHasChanged();
+    }
+
+    private void CloseOffcanvas()
+    {
+        showOffcanvas = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleUpdateSubmit()
+    {
+        try
+        {
+            var parameters = new
+            {
+                Product_ID = selectedProduct.Product_ID,
+                P_name = selectedProduct.P_name,
+                Category_ID = selectedProduct.Category_ID
+            };
+
+            await DapperRepository.ExecuteAsync("UpdateProduct", parameters);
+            // await ProductService.UpdateProductAsync(selectedProduct);
+            showOffcanvas = false;
+            products = await DapperRepository.QueryAsync<Product>("GetProducts");
+            // products = await ProductService.GetProductsAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating product: {ex.Message}");
+        }
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var parameters = new
+        {
+            Product_ID = selectedProduct.Product_ID
+        };
+        await DapperRepository.ExecuteAsync("DeleteProduct", parameters);
+        // await ProductService.DeleteProductAsync(productId);
+        showOffcanvas = false;
+        products = await DapperRepository.QueryAsync<Product>("GetProducts");
+        // products = await ProductService.GetProductsAsync();
+        StateHasChanged();
+    }
+}
 
